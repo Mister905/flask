@@ -1,10 +1,9 @@
+from flask_jwt_extended.utils import create_refresh_token
 from api.auth import bp
 from flask import json, request, jsonify
 from api.models import User
 from api import db
-from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required, JWTManager, current_user
-from werkzeug.security import generate_password_hash
-
+from flask_jwt_extended import create_access_token, create_refresh_token, get_jwt_identity, jwt_required
 
 
 @bp.route("/api/auth/load_active_user", methods=["GET"])
@@ -45,14 +44,15 @@ def login():
     user = User.query.filter_by(email=email).first()
     
     if user is None:
-        return jsonify(error=True, message="Unable to login")
+        return jsonify(error=True, message="Login unsuccessful")
 
     elif not user.check_password(password):
-        return jsonify(error=True, message="Unable to login")
+        return jsonify(error=True, message="Login unsuccessful")
 
     else:
-        token = create_access_token(identity=email)
-        return jsonify(token=token, email=email)     
+        access_token = create_access_token(identity=user.id, fresh=True)
+        refresh_token = create_refresh_token(user.id)
+        return jsonify(access_token=access_token, refresh_token=refresh_token)     
     
 
 @bp.route("/api/auth/register", methods=["POST"])
@@ -86,3 +86,12 @@ def register():
     db.session.commit()
     
     return jsonify(success=True, message="User successfully created"), 201
+
+
+
+@bp.route("/api/auth/refresh", methods=["POST"])
+@jwt_required(refresh=True)
+def get_refresh_token():
+    current_user = get_jwt_identity()
+    refresh_token = create_access_token(identity=current_user, fresh=False)
+    return jsonify(access_token=refresh_token), 200
